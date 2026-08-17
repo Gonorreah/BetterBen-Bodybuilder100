@@ -1911,12 +1911,22 @@ function isUUID(id) {
 let signInHandled = false;
 
 async function initAuth() {
-  // Wait briefly for any OAuth redirect fragment to be processed
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    await handleSignedIn(session);
-  } else {
-    showAuthScreen();
+  // Personal/local-only mode — no account required.
+  // Wait until the rest of the script has finished loading.
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  currentUser = null;
+  syncEnabled = false;
+
+  hideAuthScreen();
+  renderAll();
+
+  let savedPage = null;
+  try { savedPage = localStorage.getItem(PAGE_KEY); } catch (e) {}
+
+  const validPages = ['overview', 'history', 'samsung', 'weight'];
+  if (savedPage && validPages.includes(savedPage)) {
+    setPage(savedPage);
   }
 }
 function showAuthScreen() {
