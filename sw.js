@@ -1,15 +1,15 @@
 // Service worker for Cutting The Surplus.
-// Network-first: always tries to fetch the latest version first, so a
-// fresh commit shows up on the very next open — no more "close and
-// reopen twice" lag. Falls back to cache only when there's no signal,
-// so the app still opens offline.
+// Only cache requests belonging to this GitHub Pages app.
+// External services such as the food assistant should go
+// directly to the network and must NOT be intercepted.
 
-const CACHE_NAME = 'cutting-surplus-v2';
+const CACHE_NAME = 'cutting-surplus-v3';
+
 const ASSETS = [
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -22,24 +22,39 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => caches.delete(key))
+      )
     )
   );
   self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // IMPORTANT:
+  // Do not intercept requests to external services.
+  // This lets the food assistant / Cloudflare Worker
+  // communicate directly with the internet.
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Fresh response from the network — use it, and update the
-        // offline cache in the background for next time there's no signal.
         if (response && response.status === 200) {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          caches.open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, copy))
+            .catch(() => {});
         }
+
         return response;
       })
-      .catch(() => caches.match(event.request)) // offline — serve last-known-good
+      .catch(() => caches.match(event.request))
   );
 });
